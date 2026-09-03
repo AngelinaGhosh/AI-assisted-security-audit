@@ -1,0 +1,25 @@
+rules:
+  - id: sql-injection-string-format
+    patterns:
+      - pattern: $QUERY = "..." % $VAR
+    message: Possible SQL injection via string formatting
+    languages: [python]
+    severity: ERROR
+
+  - id: insecure-pickle-load
+    pattern: pickle.loads(...)
+    message: Insecure deserialization with pickle
+    languages: [python]
+    severity: ERROR
+
+  - id: shell-injection-subprocess
+    pattern: subprocess.call(..., shell=True)
+    message: Possible shell injection via shell=True
+    languages: [python]
+    severity: ERROR
+
+  - id: hardcoded-api-key
+    pattern: $VAR = "sk-..."
+    message: Hardcoded API key
+    languages: [python]
+    severity: WARNING

@@ -1,0 +1,4 @@
+semgrep>=1.170
+pip-audit>=2.7
+groq>=0.13
+python-dotenv>=1.0
