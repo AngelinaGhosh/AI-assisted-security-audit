@@ -1,17 +1,15 @@
-# Security Audit Agent
+# ThreatFlow
 
-A small CLI tool that runs static analysis (Semgrep) and dependency
-vulnerability scanning (pip-audit) against a codebase, then uses an LLM
-to clean up the results — merging duplicates, cutting obvious false
-positives, ranking things by how bad they actually are, and writing a
-plain-English report with suggested fixes.
+ThreatFlow is an AI-powered security triage tool. The name reflects how it works: a complete flow from scanning, to AI triage, to clear, actionable results.
 
-The reason this exists: raw Semgrep output on any real codebase is
-mostly noise. You get the same issue flagged five times, severities
-that don't match real-world risk, and zero context on whether
-something is actually exploitable or just pattern-matched code that
-happens to look risky. This tool adds a triage step on top so what's
-left is something you'd actually want to read.
+## Problem Statement
+
+Security scanners generate a lot of findings, but not every finding represents a real or equally serious vulnerability. Developers have to manually go through this noise, which takes time and can cause important vulnerabilities to be overlooked.
+
+## Proposed Solution
+
+ThreatFlow is an AI-powered security triage layer. First, the system runs security scanners such as Semgrep (for code) and pip-audit (for dependencies). The findings are then sent to an LLM, which helps identify duplicates, false positives, the actual severity, and possible fixes. The results are then displayed to the user in a simplified format, with every dismissed finding still visible for human review.
+
 
 ## How it works
 
