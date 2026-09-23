@@ -1,0 +1,55 @@
+# Offline ruleset for the live demo.
+# Deliberately a bit noisy (like real Semgrep output) so the AI triage
+# step has duplicates and false positives to clean up.
+rules:
+  - id: sql-injection-string-format
+    pattern: $QUERY = "..." % $VAR
+    message: Possible SQL injection via string formatting
+    languages: [python]
+    severity: ERROR
+
+  - id: insecure-pickle-load
+    pattern: pickle.loads(...)
+    message: Insecure deserialization with pickle
+    languages: [python]
+    severity: ERROR
+
+  - id: shell-injection-subprocess
+    pattern-either:
+      - pattern: subprocess.call(..., shell=True, ...)
+      - pattern: subprocess.run(..., shell=True, ...)
+    message: Possible shell injection via shell=True
+    languages: [python]
+    severity: ERROR
+
+  - id: hardcoded-api-key
+    patterns:
+      - pattern: $VAR = "$VAL"
+      - metavariable-regex:
+          metavariable: $VAL
+          regex: ^sk-
+    message: Hardcoded API key
+    languages: [python]
+    severity: WARNING
+
+  - id: secret-like-variable-name
+    patterns:
+      - pattern: $NAME = "..."
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(key|secret|token|password).*
+    message: Variable name suggests a hardcoded secret
+    languages: [python]
+    severity: WARNING
+
+  - id: weak-hash-md5
+    pattern: hashlib.md5(...)
+    message: MD5 is a weak hash function
+    languages: [python]
+    severity: WARNING
+
+  - id: flask-debug-enabled
+    pattern: $APP.run(..., debug=True, ...)
+    message: Flask app running with debug=True
+    languages: [python]
+    severity: WARNING

@@ -6,18 +6,23 @@ flag the same underlying issue multiple times, miss context that would \
 rule something out, and don't know which severity actually matters for \
 this codebase.
 
+Each finding has a `snippet` (the exact flagged lines) and, where \
+available, a `context` (the surrounding code with line numbers). Use the \
+context to judge where the data comes from and whether it can be \
+attacker-controlled.
+
 For each finding, decide:
 - severity: Critical, High, Medium, Low, or Info - based on real-world \
   exploitability, not just the scanner's own label.
-- is_false_positive: true only if the surrounding code (shown in the \
-  snippet) itself rules the issue out - e.g. the input is already \
+- is_false_positive: true only if the code shown (snippet or context) \
+  itself rules the issue out - e.g. the input is already \
   validated/sanitized upstream, the vulnerable call is unreachable \
   (dead code), or the snippet shows a mock/stub that never executes. \
   Do NOT mark something a false positive just because its file path \
   contains "test" or "fixture" - test fixtures are often deliberately \
   vulnerable code used to verify a scanner works, and file location \
   alone tells you nothing about exploitability. Base this only on \
-  what the snippet's code actually does.
+  what the code actually does.
 - confidence: how sure you are (low/medium/high).
 - explanation: 1-3 plain-English sentences a non-security engineer could \
   understand.

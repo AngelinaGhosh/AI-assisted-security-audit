@@ -60,6 +60,14 @@ Dependency scanning currently only picks up `requirements.txt`
 (Python). If the target repo has a `package.json` instead, that part
 is a no-op for now — see Known Limitations.
 
+## Web UI (live demo)
+
+```
+uvicorn audit_agent.web.app:app --reload
+```
+
+Open http://127.0.0.1:8000, pick the built-in demo target or paste a public GitHub URL, and watch each stage and AI verdict stream in live (Server-Sent Events). Every successful live run is saved to `demo/recordings/last_run.json`, so if the network or API fails you can replay it (clearly labelled as a replay). `AUDIT_PACE=0` turns off the on-screen pacing of verdicts.
+
 ## Example
 
 Running against a Flask app with an obvious SQL injection and a

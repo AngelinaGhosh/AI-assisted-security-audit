@@ -1,6 +1,6 @@
 import json
-import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from audit_agent.models import Finding
@@ -21,12 +21,13 @@ def run_dependency_scan(target_path: str) -> list[Finding]:
     if not req_file.exists():
         return []
 
-    if shutil.which("pip-audit") is None:
-        raise RuntimeError(
-            "pip-audit isn't installed. Run `pip install pip-audit`."
-        )
+    try:
+        import pip_audit  # noqa: F401
+    except ImportError:
+        raise RuntimeError("pip-audit isn't installed. Run `python -m pip install pip-audit`.")
 
-    cmd = ["pip-audit", "-r", str(req_file), "--format", "json"]
+    # "python -m pip_audit" rather than pip-audit.exe, same reason as semgrep
+    cmd = [sys.executable, "-m", "pip_audit", "-r", str(req_file), "--format", "json"]
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     # pip-audit also exits non-zero when it finds vulnerabilities

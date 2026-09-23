@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 
 from audit_agent.scanners.semgrep_scanner import run_semgrep
 from audit_agent.scanners.dependency_scanner import run_dependency_scan
-from audit_agent.triage.llm_triage import triage_findings
+from audit_agent.models import dedupe_exact
+from audit_agent.triage.llm_triage import DEFAULT_MODEL, triage_findings
 from audit_agent.report.markdown_report import build_report
 
 
@@ -17,7 +18,7 @@ def main():
     )
     parser.add_argument("target", help="Path to the repo/folder to scan")
     parser.add_argument("-o", "--output", default="audit_report.md", help="Where to write the report")
-    parser.add_argument("--model", default="llama-3.3-70b-versatile", help="Model to use for triage (Groq)")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Model to use for triage (Groq)")
     parser.add_argument("--skip-deps", action="store_true", help="Skip dependency scanning")
     args = parser.parse_args()
 
@@ -35,10 +36,16 @@ def main():
         print("No findings. Nothing to triage.")
         sys.exit(0)
 
-    print(f"Sending {len(findings)} findings to the LLM for triage...")
-    triaged = triage_findings(findings, model=args.model)
+    unique, exact_dups = dedupe_exact(findings)
+    if exact_dups:
+        print(f"Removed {len(exact_dups)} exact duplicates before triage")
 
-    report = build_report(triaged, args.target, raw_count=len(findings))
+    print(f"Sending {len(unique)} findings to the LLM for triage...")
+    triaged = triage_findings(unique, model=args.model)
+
+    report = build_report(
+        triaged, args.target, raw_count=len(findings), exact_duplicates=len(exact_dups)
+    )
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(report)
 

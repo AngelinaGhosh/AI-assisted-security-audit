@@ -9,9 +9,11 @@ def build_report(
     triaged: list[TriagedFinding],
     target_path: str,
     raw_count: int,
+    exact_duplicates: int = 0,
 ) -> str:
     real_findings = [t for t in triaged if not t.is_false_positive and not t.duplicate_of]
     dropped = len(triaged) - len(real_findings)
+    total_dropped = dropped + exact_duplicates
 
     lines = [
         f"# Security Audit Report",
@@ -19,7 +21,7 @@ def build_report(
         f"**Target:** `{target_path}`  ",
         f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}  ",
         f"**Raw findings:** {raw_count} -> **After triage:** {len(real_findings)} "
-        f"({dropped} dropped as duplicates/false positives)",
+        f"({total_dropped} dropped as duplicates/false positives)",
         f"",
         f"## Summary",
         f"",

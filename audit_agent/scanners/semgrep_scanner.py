@@ -1,8 +1,14 @@
 import json
-import shutil
 import subprocess
+import sys
 
 from audit_agent.models import Finding
+
+
+_SEMGREP_LAUNCHER = (
+    "import sys; sys.argv[0] = 'semgrep'; "
+    "from semgrep.console_scripts.entrypoint import main; sys.exit(main())"
+)
 
 
 class SemgrepNotFound(Exception):
@@ -18,12 +24,15 @@ def run_semgrep(target_path: str, config: str = "auto") -> list[Finding]:
     a specific ruleset (e.g. "p/owasp-top-ten") once you know what
     you're targeting.
     """
-    if shutil.which("semgrep") is None:
-        raise SemgrepNotFound(
-            "semgrep isn't on PATH. Install it with `pip install semgrep`."
-        )
+    try:
+        import semgrep  # noqa: F401
+    except ImportError:
+        raise SemgrepNotFound("semgrep isn't installed. Run `python -m pip install semgrep`.")
 
-    cmd = ["semgrep", "--config", config, "--json", "--quiet", target_path]
+    # Launch semgrep through the current Python instead of semgrep.exe, so it
+    # works when pip's Scripts folder isn't on PATH and on Windows machines
+    # where Smart App Control blocks those launcher .exe files.
+    cmd = [sys.executable, "-c", _SEMGREP_LAUNCHER, "--config", config, "--json", "--quiet", target_path]
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     # semgrep exits non-zero when it finds issues, that's not a failure
@@ -41,6 +50,7 @@ def run_semgrep(target_path: str, config: str = "auto") -> list[Finding]:
             message=r["extra"]["message"],
             raw_severity=r["extra"].get("severity", "INFO"),
             snippet=_read_snippet(r["path"], r["start"]["line"], r["end"]["line"]),
+            context=_read_context(r["path"], r["start"]["line"], r["end"]["line"]),
         ))
     return findings
 
@@ -56,3 +66,24 @@ def _read_snippet(path: str, start_line: int, end_line: int) -> str:
         return "".join(lines[start_line - 1:end_line]).rstrip()
     except OSError:
         return ""
+
+
+
+CONTEXT_RADIUS = 8  # lines of code to include above and below a finding
+
+
+def _read_context(path: str, start_line: int, end_line: int, radius: int = CONTEXT_RADIUS) -> str:
+    """The flagged lines alone usually can't tell you whether the input is
+    attacker-controlled. Give the LLM the surrounding code too, with line
+    numbers, so it can actually judge exploitability.
+    """
+    try:
+        with open(path) as f:
+            lines = f.readlines()
+    except OSError:
+        return ""
+    lo = max(start_line - 1 - radius, 0)
+    hi = min(end_line + radius, len(lines))
+    return "".join(
+        f"{n:>4} | {lines[n - 1]}" for n in range(lo + 1, hi + 1)
+    ).rstrip()

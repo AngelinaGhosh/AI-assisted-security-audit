@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Audit Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #EEF1F4;
+    --surface: #FFFFFF;
+    --ink: #172131;
+    --muted: #5D6979;
+    --line: #D3D9E1;
+    --accent: #24497A;
+    --accent-ink: #FFFFFF;
+    --critical: #A3161B;
+    --high: #C9531A;
+    --medium: #A87710;
+    --low: #3A7CA5;
+    --info: #7B8594;
+    --pending: #C5CCD6;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 16px/1.5 var(--sans);
+  }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 28px 28px 60px; }
+
+  /* header + controls */
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+  h1 { font-size: 1.75rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .model { color: var(--muted); font-size: 0.9rem; }
+  .model b { font-weight: 500; color: var(--ink); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 18px 0 8px; }
+  .controls input[type=text] {
+    flex: 1 1 340px; min-width: 0; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  }
+  .controls select { padding: 10px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  .controls label.check { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+  .btn { padding: 10px 18px; border-radius: 6px; border: 1px solid var(--accent); cursor: pointer; font-weight: 600; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.secondary { background: var(--surface); color: var(--accent); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .hint { color: var(--muted); font-size: 0.875rem; margin: 0; }
+
+  .banner { margin: 14px 0 0; padding: 10px 14px; border-radius: 6px; font-weight: 500; }
+  .banner.error { background: #FBE9E9; color: var(--critical); border: 1px solid #EBC3C4; }
+  .banner.replay { background: #E6EDF6; color: var(--accent); border: 1px solid #C6D4E6; }
+  [hidden] { display: none !important; }
+
+  /* pipeline stages: a real sequence, so it is numbered */
+  .stages { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 24px 0 0; padding: 0; counter-reset: stage; }
+  .stages li {
+    counter-increment: stage; position: relative; padding: 12px 14px 12px 46px;
+    border-top: 3px solid var(--line); color: var(--muted);
+  }
+  .stages li::before {
+    content: counter(stage); position: absolute; left: 12px; top: 12px;
+    width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 0.8rem; font-weight: 600; background: var(--line); color: var(--muted);
+  }
+  .stages li .name { display: block; font-weight: 600; }
+  .stages li .detail { font-size: 0.875rem; }
+  .stages li.active { border-top-color: var(--accent); color: var(--ink); }
+  .stages li.active::before { background: var(--accent); color: var(--accent-ink); animation: pulse 1.2s ease-in-out infinite; }
+  .stages li.done { border-top-color: var(--ink); color: var(--ink); }
+  .stages li.done::before { content: "✓"; background: var(--ink); color: #fff; }
+  .stages li.skipped { opacity: 0.55; }
+  @keyframes pulse { 50% { opacity: 0.55; } }
+
+  /* the funnel: raw count vs real count, plus one cell per raw finding */
+  .funnel { margin: 26px 0 0; padding: 22px 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  .counts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 28px; }
+  .count { display: flex; align-items: baseline; gap: 10px; }
+  .count .num { font-size: 3.4rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .count .lbl { font-size: 1.05rem; color: var(--muted); }
+  .count.raw .num { color: var(--muted); }
+  .arrow { font-size: 2rem; color: var(--pending); }
+  .dropped { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 12px 0 0; color: var(--muted); font-size: 0.95rem; }
+  .dropped span b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .meter { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 18px; }
+  .cell {
+    width: 22px; height: 30px; border-radius: 3px; background: var(--pending);
+    border: 0; padding: 0; cursor: pointer; transition: background-color .35s, transform .35s;
+  }
+  .cell.real { transform: scaleY(1.12); }
+  .cell.false_positive { background: repeating-linear-gradient(135deg, #D9DEE5 0 4px, #EEF1F4 4px 8px); }
+  .cell.duplicate { background: #E3E7EC; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 0.85rem; color: var(--muted); }
+  .legend i { display: inline-block; width: 12px; height: 14px; border-radius: 2px; vertical-align: -2px; margin-right: 6px; }
+
+  /* two columns */
+  .cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 24px; margin-top: 26px; }
+  .col h2 { font-size: 1.1rem; margin: 0 0 4px; }
+  .col .sub { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; max-height: 70vh; overflow-y: auto; }
+  .empty { padding: 28px 20px; color: var(--muted); }
+
+  /* raw scanner rows */
+  .row {
+    display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: start;
+    padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; width: 100%;
+    background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left;
+    transition: opacity .4s;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: #F6F8FA; }
+  .row .idx { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.85rem; padding-top: 2px; }
+  .row .rule { font-family: var(--mono); font-size: 0.85rem; word-break: break-word; }
+  .row .where { color: var(--muted); font-size: 0.8rem; }
+  .tool { display: inline-block; font-size: 0.72rem; padding: 1px 6px; border-radius: 3px; background: #E9EDF2; color: var(--muted); margin-right: 6px; }
+  .stamp { font-size: 0.78rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; color: var(--muted); }
+  .row.real .stamp { color: #fff; }
+  .row.false_positive, .row.duplicate { opacity: 0.55; }
+  .row.false_positive .rule, .row.duplicate .rule { text-decoration: line-through; }
+  .row.false_positive .stamp { border: 1px dashed var(--muted); }
+  .row.duplicate .stamp { border: 1px solid var(--line); }
+
+  /* AI verdict cards */
+  .feed { padding: 6px 0; }
+  .card { padding: 16px 20px; border-bottom: 1px solid var(--line); border-left: 5px solid var(--pending); }
+  .card:last-child { border-bottom: 0; }
+  .card.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background: #FFF6D6; } to { background: transparent; } }
+  .card .top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .sev { font-weight: 700; font-size: 0.85rem; padding: 2px 10px; border-radius: 4px; color: #fff; }
+  .card .rule { font-family: var(--mono); font-size: 0.9rem; }
+  .card .where { color: var(--muted); font-size: 0.85rem; }
+  .card .conf { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+  .card p { margin: 10px 0 0; max-width: 72ch; }
+  .card pre {
+    margin: 10px 0 0; padding: 10px 12px; background: #F3F5F8; border-radius: 6px;
+    font: 0.85rem/1.5 var(--mono); overflow-x: auto; white-space: pre;
+  }
+  .card .fix { margin-top: 10px; padding: 8px 12px; border-radius: 6px; background: #EEF5EE; color: #1F4D2B; }
+  .card .fix b { font-weight: 600; }
+  .card.minor { padding: 10px 20px; color: var(--muted); }
+  .card.minor p { margin-top: 4px; font-size: 0.9rem; }
+  .card.minor .kind { font-weight: 600; color: var(--ink); }
+  .linkish { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; }
+
+  .batch-note { padding: 10px 20px; color: var(--accent); font-weight: 500; border-bottom: 1px solid var(--line); background: #F4F7FB; }
+
+  .feed-tools { display: flex; gap: 8px; margin: 0 0 12px; }
+  .toggle { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 0.9rem; }
+  .toggle[aria-pressed=true] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .feed.real-only .card:not(.real), .feed.real-only .batch-note { display: none; }
+
+  /* severity colours */
+  .bg-Critical { background: var(--critical); } .bd-Critical { border-left-color: var(--critical); }
+  .bg-High { background: var(--high); }         .bd-High { border-left-color: var(--high); }
+  .bg-Medium { background: var(--medium); }     .bd-Medium { border-left-color: var(--medium); }
+  .bg-Low { background: var(--low); }           .bd-Low { border-left-color: var(--low); }
+  .bg-Info { background: var(--info); }         .bd-Info { border-left-color: var(--info); }
+
+  @media (max-width: 900px) {
+    .cols { grid-template-columns: 1fr; }
+    .stages { grid-template-columns: 1fr 1fr; }
+    .count .num { font-size: 2.6rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Security Audit Agent</h1>
+    <div class="model">Triage model: <b id="model">loading…</b></div>
+  </header>
+
+  <div class="controls">
+    <input id="target" type="text" value="demo" aria-label="What to scan"
+           placeholder="demo, a folder path, or https://github.com/user/repo">
+    <select id="rules" aria-label="Rule set">
+      <option value="demo">Demo rules (offline)</option>
+      <option value="auto">Semgrep community rules</option>
+    </select>
+    <label class="check"><input id="deps" type="checkbox" checked> Check dependencies</label>
+    <button id="run" class="btn primary">Run scan</button>
+    <button id="replay" class="btn secondary" disabled>Replay last run</button>
+  </div>
+  <p class="hint">Type <b>demo</b> to scan the built-in sample app, a local folder path, or a public GitHub URL.</p>
+
+  <div id="error" class="banner error" role="alert" hidden></div>
+  <div id="replayNote" class="banner replay" hidden>Replaying the last recorded live run. No API calls are being made.</div>
+
+  <ol class="stages" aria-label="Audit progress">
+    <li data-stage="code"><span class="name">Scan the code</span><span class="detail">Semgrep static analysis</span></li>
+    <li data-stage="deps"><span class="name">Check dependencies</span><span class="detail">pip-audit, known CVEs</span></li>
+    <li data-stage="dedupe"><span class="name">Remove exact repeats</span><span class="detail">Free, no AI needed</span></li>
+    <li data-stage="ai"><span class="name">AI review</span><span class="detail">Severity, false positives, fixes</span></li>
+  </ol>
+
+  <section class="funnel" aria-live="polite">
+    <div class="counts">
+      <div class="count raw"><span class="num" id="rawCount">0</span><span class="lbl">raw findings</span></div>
+      <span class="arrow" aria-hidden="true">→</span>
+      <div class="count"><span class="num" id="realCount">0</span><span class="lbl">real issues</span></div>
+    </div>
+    <div class="dropped">
+      <span><b id="exactCount">0</b> exact repeats</span>
+      <span><b id="aiDupCount">0</b> duplicates found by AI</span>
+      <span><b id="fpCount">0</b> false positives</span>
+      <span><b id="pendingCount">0</b> waiting for review</span>
+    </div>
+    <div class="meter" id="meter" aria-label="One block per raw finding"></div>
+    <div class="legend">
+      <span><i class="bg-Critical"></i>Critical</span>
+      <span><i class="bg-High"></i>High</span>
+      <span><i class="bg-Medium"></i>Medium</span>
+      <span><i class="bg-Low"></i>Low</span>
+      <span><i style="background:repeating-linear-gradient(135deg,#D9DEE5 0 3px,#EEF1F4 3px 6px)"></i>False positive</span>
+      <span><i style="background:#E3E7EC"></i>Duplicate</span>
+      <span><i style="background:var(--pending)"></i>Not reviewed yet</span>
+    </div>
+  </section>
+
+  <div class="cols">
+    <section class="col">
+      <h2>Scanner output</h2>
+      <p class="sub">Everything the scanners flagged, before any triage.</p>
+      <div class="panel" id="rawList"><div class="empty">Run a scan to see what the scanners flag.</div></div>
+    </section>
+    <section class="col">
+      <h2>AI review</h2>
+      <p class="sub">Each finding gets a verdict, a real-world severity and a fix.</p>
+      <div class="feed-tools" id="feedTools" hidden>
+        <button class="toggle" id="showAll" aria-pressed="true">All verdicts</button>
+        <button class="toggle" id="showReal" aria-pressed="false">Real issues only</button>
+      </div>
+      <div class="panel"><div class="feed" id="feed"><div class="empty">Verdicts appear here as the AI reviews each finding.</div></div></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const SEV_ORDER = ["Critical", "High", "Medium", "Low", "Info"];
+let source = null, raw = [], verdicts = {}, finished = false;
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined && text !== null) n.textContent = text;   // never innerHTML with scan data
+  return n;
+}
+function sevClass(s) { return SEV_ORDER.includes(s) ? s : "Info"; }
+function where(f) { return f.line ? `${f.path}:${f.line}` : f.path; }
+
+async function loadConfig(warn) {
+  try {
+    const c = await (await fetch("/api/config")).json();
+    $("model").textContent = c.model;
+    $("replay").disabled = !c.has_recording;
+    if (warn && !c.has_api_key) showError("No GROQ_API_KEY found in .env. Live scans won't work, but Replay will if a run was recorded.");
+  } catch { $("model").textContent = "unknown"; }
+}
+
+function showError(msg) { $("error").textContent = msg; $("error").hidden = false; }
+
+function reset() {
+  raw = []; verdicts = {}; finished = false;
+  $("error").hidden = true; $("replayNote").hidden = true; $("feedTools").hidden = true;
+  $("rawList").replaceChildren(el("div", "empty", "Scanning…"));
+  $("feed").replaceChildren(el("div", "empty", "Waiting for scanner results…"));
+  $("feed").classList.remove("real-only");
+  $("meter").replaceChildren();
+  document.querySelectorAll(".stages li").forEach(li => {
+    li.className = "";
+    li.querySelector(".detail").textContent = li.dataset.default;
+  });
+  updateCounts();
+}
+
+function setBusy(busy) {
+  $("run").disabled = busy;
+  $("replay").disabled = busy;
+  $("run").textContent = busy ? "Scanning…" : "Run scan";
+}
+
+function start(replay) {
+  if (source) source.close();
+  reset(); setBusy(true);
+  const q = new URLSearchParams({
+    target: $("target").value, rules: $("rules").value,
+    deps: $("deps").checked, replay,
+  });
+  source = new EventSource("/api/scan?" + q);
+  const on = (name, fn) => source.addEventListener(name, e => fn(JSON.parse(e.data)));
+
+  on("start", d => { if (d.mode === "replay") $("replayNote").hidden = false; $("model").textContent = d.model; });
+  on("stage", onStage);
+  on("raw", d => renderRaw(d.findings));
+  on("batch", d => {
+    const note = el("div", "batch-note", `AI is reviewing batch ${d.n} of ${d.total} (${d.size} findings)…`);
+    $("feed").append(note); note.scrollIntoView({ block: "nearest" });
+    setStageDetail("ai", `Batch ${d.n} of ${d.total}`);
+  });
+  on("verdict", onVerdict);
+  on("summary", onSummary);
+  on("failure", d => { showError(d.message); stop(); });
+  on("done", () => { finished = true; stop(); });
+  // a connection error (not our own "failure" event): stop instead of auto-reconnecting
+  source.onerror = () => { if (!finished) { showError("Lost connection to the server."); } stop(); };
+}
+
+function stop() {
+  if (source) { source.close(); source = null; }
+  setBusy(false);
+  loadConfig(false);   // refresh whether a recording exists
+  document.querySelectorAll(".stages li.active").forEach(li => li.className = "");
+}
+
+function setStageDetail(stage, text) { document.querySelector(`[data-stage=${stage}] .detail`).textContent = text; }
+
+function onStage(d) {
+  const li = document.querySelector(`[data-stage=${d.stage}]`);
+  li.className = d.state;
+  const labels = {
+    code: n => `${n} findings`, deps: n => `${n} vulnerable versions`,
+    dedupe: n => `${n} removed`, ai: n => `${n} findings reviewed`,
+  };
+  if (d.state === "done") setStageDetail(d.stage, labels[d.stage](d.count));
+  if (d.state === "skipped") setStageDetail(d.stage, "Skipped");
+  if (d.state === "active" && d.stage !== "ai") setStageDetail(d.stage, "Running…");
+  if (d.state === "active" && d.stage === "ai") setStageDetail("ai", "Sending findings…");
+}
+
+function renderRaw(list) {
+  raw = list;
+  const box = $("rawList"); box.replaceChildren();
+  $("feed").replaceChildren();
+  if (!list.length) { box.append(el("div", "empty", "No findings. Nothing to review.")); return; }
+  for (const f of list) {
+    const row = el("button", "row"); row.id = "row-" + f.index; row.type = "button";
+    row.append(el("span", "idx", "#" + (f.index + 1)));
+    const mid = el("span");
+    const top = el("div"); top.append(el("span", "tool", f.tool === "semgrep" ? "code" : "dependency"), el("span", "rule", f.rule));
+    mid.append(top, el("div", "where", where(f)));
+    row.append(mid, el("span", "stamp", f.raw_severity.toLowerCase()));
+    row.addEventListener("click", () => focusCard(f.index));
+    box.append(row);
+
+    const cell = el("button", "cell"); cell.id = "cell-" + f.index; cell.type = "button";
+    cell.title = `#${f.index + 1} ${f.rule}`;
+    cell.setAttribute("aria-label", `Finding ${f.index + 1}: ${f.rule}`);
+    cell.addEventListener("click", () => focusCard(f.index));
+    $("meter").append(cell);
+  }
+  updateCounts();
+}
+
+function onVerdict(v) {
+  verdicts[v.index] = v;
+  const f = raw[v.index];
+  const row = $("row-" + v.index), cell = $("cell-" + v.index);
+  const stamp = row.querySelector(".stamp");
+  row.classList.add(v.verdict);
+  cell.classList.add(v.verdict);
+  if (v.verdict === "real") {
+    const s = sevClass(v.severity);
+    stamp.textContent = s; stamp.classList.add("bg-" + s); cell.classList.add("bg-" + s);
+  } else {
+    stamp.textContent = v.verdict === "duplicate" ? "Duplicate" : "False positive";
+  }
+
+  const card = v.verdict === "real" ? realCard(f, v) : minorCard(f, v);
+  card.id = "card-" + v.index;
+  $("feed").append(card);
+  card.scrollIntoView({ block: "nearest" });
+  updateCounts();
+}
+
+function realCard(f, v) {
+  const s = sevClass(v.severity);
+  const card = el("article", `card real bd-${s}`);
+  const top = el("div", "top");
+  top.append(el("span", `sev bg-${s}`, s), el("span", "rule", f.rule), el("span", "where", where(f)),
+             el("span", "conf", `confidence: ${v.confidence}`));
+  card.append(top);
+  if (v.explanation) card.append(el("p", "", v.explanation));
+  if (f.snippet) card.append(el("pre", "", f.snippet));
+  if (v.fix) {
+    const fix = el("div", "fix"); fix.append(el("b", "", "Fix: "), document.createTextNode(v.fix));
+    card.append(fix);
+  }
+  return card;
+}
+
+function minorCard(f, v) {
+  const card = el("article", "card minor");
+  const top = el("div", "top");
+  const kind = v.verdict === "duplicate"
+    ? (v.by === "rule" ? "Exact repeat" : "Duplicate (AI)")
+    : "False positive";
+  top.append(el("span", "kind", kind), el("span", "rule", f.rule), el("span", "where", where(f)));
+  card.append(top);
+  const p = el("p", "", v.explanation || "");
+  if (v.verdict === "duplicate" && v.duplicate_of !== null && v.duplicate_of !== undefined) {
+    p.append(" Same issue as ");
+    const link = el("button", "linkish", "#" + (v.duplicate_of + 1)); link.type = "button";
+    link.addEventListener("click", () => focusCard(v.duplicate_of));
+    p.append(link, ".");
+  }
+  card.append(p);
+  return card;
+}
+
+function focusCard(i) {
+  const card = $("card-" + i);
+  if (!card) return;
+  $("feed").classList.remove("real-only"); setFilter(false);
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+}
+
+function updateCounts() {
+  const vs = Object.values(verdicts);
+  $("rawCount").textContent = raw.length;
+  $("realCount").textContent = vs.filter(v => v.verdict === "real").length;
+  $("exactCount").textContent = vs.filter(v => v.by === "rule").length;
+  $("aiDupCount").textContent = vs.filter(v => v.by === "ai" && v.verdict === "duplicate").length;
+  $("fpCount").textContent = vs.filter(v => v.verdict === "false_positive").length;
+  $("pendingCount").textContent = raw.length - vs.length;
+}
+
+function onSummary() {
+  $("feedTools").hidden = false;
+  // re-order the finished feed: real issues by severity first, then the filtered-out ones
+  const cards = [...$("feed").querySelectorAll(".card")];
+  const rank = c => {
+    const v = verdicts[+c.id.slice(5)];
+    return v.verdict === "real" ? SEV_ORDER.indexOf(sevClass(v.severity)) : 10;
+  };
+  cards.sort((a, b) => rank(a) - rank(b));
+  $("feed").replaceChildren(...cards);
+}
+
+function setFilter(realOnly) {
+  $("feed").classList.toggle("real-only", realOnly);
+  $("showAll").setAttribute("aria-pressed", String(!realOnly));
+  $("showReal").setAttribute("aria-pressed", String(realOnly));
+}
+
+document.querySelectorAll(".stages li").forEach(li => li.dataset.default = li.querySelector(".detail").textContent);
+$("run").addEventListener("click", () => start(false));
+$("replay").addEventListener("click", () => start(true));
+$("target").addEventListener("keydown", e => { if (e.key === "Enter" && !$("run").disabled) start(false); });
+$("showAll").addEventListener("click", () => setFilter(false));
+$("showReal").addEventListener("click", () => setFilter(true));
+loadConfig(true);
+</script>
+</body>
+</html>
