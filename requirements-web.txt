@@ -1,0 +1,15 @@
+# Web UI + test dependencies, on top of the core scanner/triage ones.
+# Install with:  pip install -r requirements-web.txt
+#
+# Versions are pinned and checked to install together (pip check clean).
+# Note: fastapi is held at 0.141.1 on purpose. 0.142+ needs
+# opentelemetry-api>=1.44, but semgrep 1.180 pins opentelemetry-api~=1.37,
+# so the newer fastapi can't be installed alongside semgrep.
+
+-r requirements.txt
+
+fastapi==0.141.1
+uvicorn[standard]==0.54.0   # ASGI server that runs the web app
+httpx==0.28.1               # needed by FastAPI's TestClient in tests/test_web.py
+pytest==9.1.1
+pydantic==2.14.1            # used for validating LLM responses (next change)

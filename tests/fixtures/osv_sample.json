@@ -1,0 +1,65 @@
+{
+  "results": [
+    {
+      "source": {"path": "/repo/requirements.txt", "type": "lockfile"},
+      "packages": [
+        {
+          "package": {"name": "requests", "version": "2.6.0", "ecosystem": "PyPI"},
+          "vulnerabilities": [
+            {
+              "id": "GHSA-x84v-xcm2-53pg",
+              "aliases": ["CVE-2018-18074"],
+              "summary": "Insufficiently Protected Credentials in Requests",
+              "affected": [{"package": {"name": "requests", "ecosystem": "PyPI"},
+                            "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "2.20.0"}]}]}]
+            },
+            {
+              "id": "PYSEC-2018-28",
+              "aliases": ["CVE-2018-18074", "GHSA-x84v-xcm2-53pg"],
+              "affected": [{"package": {"name": "requests", "ecosystem": "PyPI"},
+                            "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "2.20.0"}]}]}]
+            }
+          ],
+          "groups": [
+            {"ids": ["GHSA-x84v-xcm2-53pg", "PYSEC-2018-28"], "aliases": ["CVE-2018-18074", "GHSA-x84v-xcm2-53pg", "PYSEC-2018-28"], "max_severity": "9.8"}
+          ]
+        }
+      ]
+    },
+    {
+      "source": {"path": "/repo/web/package-lock.json", "type": "lockfile"},
+      "packages": [
+        {
+          "package": {"name": "lodash", "version": "4.17.15", "ecosystem": "npm"},
+          "vulnerabilities": [
+            {
+              "id": "GHSA-p6mc-m468-83gw",
+              "aliases": ["CVE-2020-8203"],
+              "summary": "Prototype Pollution in lodash",
+              "affected": [{"package": {"name": "lodash", "ecosystem": "npm"},
+                            "ranges": [{"type": "SEMVER", "events": [{"introduced": "3.7.0"}, {"fixed": "4.17.19"}]}]}]
+            }
+          ],
+          "groups": [
+            {"ids": ["GHSA-p6mc-m468-83gw"], "aliases": ["CVE-2020-8203", "GHSA-p6mc-m468-83gw"], "max_severity": "7.4"}
+          ]
+        }
+      ]
+    },
+    {
+      "source": {"path": "/repo/go.mod", "type": "lockfile"},
+      "packages": [
+        {
+          "package": {"name": "golang.org/x/net", "version": "0.7.0", "ecosystem": "Go"},
+          "vulnerabilities": [
+            {"id": "GO-2023-1988", "aliases": ["CVE-2023-3978", "GHSA-2wrh-6pvc-2jm9"], "summary": "Improper rendering of text nodes in golang.org/x/net/html"}
+          ],
+          "groups": [
+            {"ids": ["GO-2023-1988"], "aliases": ["CVE-2023-3978", "GHSA-2wrh-6pvc-2jm9", "GO-2023-1988"], "max_severity": "",
+             "experimentalAnalysis": {"GO-2023-1988": {"called": false}}}
+          ]
+        }
+      ]
+    }
+  ]
+}
