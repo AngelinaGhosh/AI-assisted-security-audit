@@ -133,6 +133,20 @@ heuristics, strongest for Python and JS/TS. They don't build a full call
 graph, so they're meant to push obviously-unused or internal code down the
 list, not to prove something is safe.
 
+## Fixes found while scanning real repos
+
+- **Non-English text on Windows.** Windows Python defaults to the legacy
+  code page, so Semgrep's output on repos with non-ASCII characters came
+  back empty ("the JSON object must be str, bytes or bytearray, not
+  NoneType"). `scanners/semgrep_scanner_v2.py` forces UTF-8 for Semgrep's
+  output and for reading source files; the v2 pipeline uses it.
+- **Groq rate limits.** Big repos send many batches. On a 429 the triage
+  now waits (using Groq's `retry-after`, capped at 60s) and retries up to
+  6 times, then stops with a clear message instead of a stack trace.
+- **Unused code is not a false positive.** The prompt no longer lets the
+  model drop a real issue just because it's currently unused; the risk
+  score lowers its priority instead.
+
 ## Tests
 
 ```bash
@@ -167,6 +181,7 @@ audit_agent/
   models_ext.py              DependencyFinding, RiskInfo
   pipeline.py                the v2 pipeline (used by CLI and web)
   cli_v2.py
+  scanners/semgrep_scanner_v2.py  UTF-8-safe Semgrep runner (Windows)
   scanners/osv_scanner.py
   scanners/secret_scanner.py
   triage/schema.py           JSON schema + Pydantic validation
@@ -186,5 +201,6 @@ tests/
   test_llm_validation.py
   test_enrichment.py
   test_pipeline_v2.py
+  test_real_repos.py
   fixtures/osv_sample.json
 ```

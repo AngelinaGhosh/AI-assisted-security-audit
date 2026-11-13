@@ -24,7 +24,7 @@ from audit_agent.models import Finding, TriagedFinding, dedupe_exact
 from audit_agent.models_ext import DependencyFinding
 from audit_agent.scanners.osv_scanner import scan_dependencies
 from audit_agent.scanners.secret_scanner import find_gitleaks, redact_findings, run_gitleaks
-from audit_agent.scanners.semgrep_scanner import run_semgrep
+from audit_agent.scanners.semgrep_scanner_v2 import run_semgrep
 from audit_agent.triage.llm_triage import BATCH_SIZE, DEFAULT_MODEL
 from audit_agent.triage.validated_triage import BatchResult, triage_batches_validated
 

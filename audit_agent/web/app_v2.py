@@ -78,7 +78,7 @@ def _resolve_target(target: str) -> tuple[Path, Path | None]:
             raise ValueError("Only public GitHub repo URLs are supported, like https://github.com/user/repo")
         tmp = Path(tempfile.mkdtemp(prefix="audit-"))
         result = subprocess.run(["git", "clone", "--depth", "1", target, str(tmp / "repo")],
-                                capture_output=True, text=True, timeout=120)
+                                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
         if result.returncode != 0:
             shutil.rmtree(tmp, ignore_errors=True)
             raise ValueError(f"Couldn't clone that repo: {result.stderr.strip()[:200]}")

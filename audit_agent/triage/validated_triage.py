@@ -17,6 +17,7 @@ returned `issues` list so it can be shown in the UI and the report.
 """
 import json
 import os
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
@@ -29,6 +30,8 @@ from audit_agent.triage.prompts_v2 import TRIAGE_SYSTEM_PROMPT_V2, build_user_me
 from audit_agent.triage.schema import RESPONSE_FORMAT, Verdict, extract_json, validate_batch
 
 MAX_TOKENS = 8000
+RATE_LIMIT_RETRIES = 6        # waits up to ~6 minutes in total before giving up
+RATE_LIMIT_MAX_WAIT = 60      # seconds
 _FALLBACK_SEVERITY = {
     "CRITICAL": "Critical", "ERROR": "High", "HIGH": "High",
     "WARNING": "Medium", "MEDIUM": "Medium", "INFO": "Low", "LOW": "Low",
@@ -55,7 +58,33 @@ class BatchResult:
 
 # ------------------------------------------------------------ API call
 
+def _retry_after(err: Exception, attempt: int) -> float:
+    """How long to wait after a 429. Groq sends a retry-after header;
+    without one, back off 10s, 20s, 40s... capped at a minute."""
+    try:
+        value = float(err.response.headers.get("retry-after"))  # type: ignore[attr-defined]
+    except (AttributeError, TypeError, ValueError):
+        value = 10 * 2 ** attempt
+    return min(max(value, 1.0), RATE_LIMIT_MAX_WAIT)
+
+
 def _request(client: Groq, model: str, payload: list[dict]) -> str:
+    """Call the API, waiting and retrying when Groq's rate limit is hit
+    (free-tier limits are low and a big repo sends many batches)."""
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        try:
+            return _request_once(client, model, payload)
+        except groq.RateLimitError as e:
+            if attempt == RATE_LIMIT_RETRIES:
+                raise RuntimeError(
+                    "Groq rate limit still hit after several retries. Wait a few minutes and "
+                    "re-run, or scan a smaller part of the repo."
+                ) from e
+            time.sleep(_retry_after(e, attempt))
+    raise AssertionError("unreachable")
+
+
+def _request_once(client: Groq, model: str, payload: list[dict]) -> str:
     """One API call. Returns the raw text, or raises TruncatedResponse /
     BadResponse so the caller can decide how to recover."""
     mode = _FORMAT_MODE.get(model, "schema")
@@ -85,7 +114,7 @@ def _request(client: Groq, model: str, payload: list[dict]) -> str:
             raise BadResponse("model output failed schema validation on the API side")
         if mode != "none" and ("response_format" in msg or "json_schema" in msg or "not supported" in msg):
             _FORMAT_MODE[model] = "json" if mode == "schema" else "none"
-            return _request(client, model, payload)
+            return _request_once(client, model, payload)
         raise
 
     choice = response.choices[0]
